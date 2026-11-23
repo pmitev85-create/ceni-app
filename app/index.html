@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Цени</title>
-  <meta name="description" content="Сравнение на цени в Lidl, Kaufland, Metro и други вериги">
+  <meta name="description" content="Любимите ми продукти и цените им по магазини">
   <meta name="theme-color" content="#1f6f43">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
@@ -21,17 +21,19 @@
   </header>
 
   <main>
-    <!-- 1. Моят списък -->
-    <section id="tab-spisak" class="tab active" aria-label="Моят списък">
-      <div id="koshnica" class="card koshnica"></div>
-      <input id="filtar" class="search" type="search" placeholder="Филтрирай списъка…" autocomplete="off">
-      <div id="spisak"></div>
-      <p class="muted center small">Натисни продукт, за да видиш всички вериги.</p>
+    <!-- 1. Любими -->
+    <section id="tab-lyubimi" class="tab active" aria-label="Любими продукти">
+      <div id="obobshtenie"></div>
+      <div id="lyubimi"></div>
+      <div class="kopie">
+        <button id="iznesi" class="btn secondary small-btn">Запази копие</button>
+        <button id="vnesi" class="btn secondary small-btn">Възстанови от копие</button>
+      </div>
     </section>
 
     <!-- 2. Търсене -->
     <section id="tab-tarsi" class="tab" aria-label="Търсене">
-      <input id="tarsi" class="search" type="search" placeholder="Напр. олио, кашкавал, кафе lavazza…" autocomplete="off">
+      <input id="tarsi" class="search" type="search" placeholder="Напр. верея мляко, lavazza, сирене маджаров…" autocomplete="off">
       <div id="tarsi-rez"></div>
     </section>
 
@@ -52,26 +54,23 @@
   </main>
 
   <nav class="tabs" role="tablist">
-    <button class="tabbtn active" data-tab="spisak" role="tab"><span>🧺</span>Списък</button>
+    <button class="tabbtn active" data-tab="lyubimi" role="tab"><span>⭐</span>Любими</button>
     <button class="tabbtn" data-tab="tarsi" role="tab"><span>🔎</span>Търси</button>
     <button class="tabbtn" data-tab="skan" role="tab"><span>📷</span>Сканирай</button>
   </nav>
 
-  <dialog id="dobavi">
-    <form method="dialog" id="dobavi-forma">
-      <h2>Добави в списъка</h2>
-      <label>Име в таблицата<input id="d-ime" required></label>
-      <label>Думи за търсене<input id="d-dumi" required></label>
-      <div class="row">
-        <label>Количество<input id="d-kol" inputmode="decimal" value="1"></label>
-        <label>Мярка
-          <select id="d-merka"><option>кг</option><option>л</option><option>бр</option></select>
-        </label>
-      </div>
-      <p class="muted small">Ще се отвори GitHub с попълнен формуляр. Натисни <b>Create</b> и до около минута продуктът е в списъка.</p>
+  <dialog id="sledi">
+    <form method="dialog">
+      <h2 id="s-zaglavie">Следи продукта</h2>
+      <label>Име<input id="s-ime" required></label>
+      <label>Думи, по които го търся във веригите
+        <input id="s-dumi" required autocomplete="off">
+      </label>
+      <label class="check" id="s-razmer-red"><input type="checkbox" id="s-razmer"> <span id="s-razmer-tekst"></span></label>
+      <div id="s-preglad" class="preglad"></div>
       <div class="row end">
         <button class="btn secondary" value="cancel" formnovalidate>Отказ</button>
-        <button class="btn" value="ok">Продължи</button>
+        <button class="btn" value="ok">⭐ Запази</button>
       </div>
     </form>
   </dialog>

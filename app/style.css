@@ -155,3 +155,33 @@ dialog h2 { margin: 0 0 10px; font-size: 18px; }
 dialog label { display: block; font-size: 13px; color: var(--muted); }
 dialog label input, dialog label select { margin-top: 4px; }
 .prazno { text-align: center; padding: 24px 8px; color: var(--muted); }
+
+/* ---- любими ---- */
+.rez { grid-template-columns: auto 1fr auto; }
+.rez .zvezda {
+  grid-row: span 2; align-self: center; background: none; border: 0; cursor: pointer;
+  font-size: 26px; line-height: 1; color: var(--muted); padding: 4px 6px 4px 0;
+}
+.rez .zvezda.pylna { color: #e0a100; }
+.rez .v { grid-column: 2; }
+.trend { font-size: 12px; font-weight: 600; white-space: nowrap; margin-left: 4px; color: var(--muted); }
+.trend.dolu { color: var(--best); }
+.trend.gore { color: var(--promo); }
+.deistvia { display: flex; gap: 16px; justify-content: flex-end; margin-top: 8px; }
+.link { background: none; border: 0; font: inherit; font-size: 14px; color: var(--accent); cursor: pointer; padding: 4px 0; }
+.opasno { color: var(--promo); }
+.produkt:not(.open) > .deistvia { display: flex; }
+.check { display: flex !important; align-items: center; gap: 8px; color: var(--text) !important; font-size: 15px !important; margin-bottom: 10px; }
+.check input { width: 22px; height: 22px; margin: 0; flex: 0 0 auto; }
+.preglad { font-size: 13px; background: var(--bg); border-radius: 10px; padding: 8px 10px; margin-bottom: 12px; max-height: 32vh; overflow: auto; }
+.pred { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.pred:last-child { border-bottom: 0; }
+.pred .a { grid-column: 1 / -1; color: var(--muted); overflow-wrap: anywhere; }
+.kopie { display: flex; gap: 8px; justify-content: center; margin: 16px 0 8px; }
+.small-btn { font-size: 13px; padding: 8px 12px; }
+#toast {
+  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+  background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px;
+  opacity: 0; transition: .25s; pointer-events: none; z-index: 20; max-width: 90vw;
+}
+#toast.vidim { opacity: 1; transform: translateX(-50%) translateY(0); }

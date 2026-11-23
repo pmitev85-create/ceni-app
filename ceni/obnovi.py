@@ -470,6 +470,12 @@ def prirodna_cena(ime: str, cena: float, kategoria: int | None, edinica: str = "
     return None, ""
 
 
+def razmer_na(tekst: str) -> float | None:
+    """Точната разфасовка (в кг / л / бр), ако е написана в името."""
+    tochni = [r for r in razfasovki(tekst) if not r.priblizitelno and r.kolichestvo > 0]
+    return round(tochni[0].kolichestvo, 3) if tochni else None
+
+
 def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp, grad, magazini) -> None:
     """Данни за мобилното приложение: сравнението по списъка + всички артикули в града за търсене."""
     def art(a: Artikul | None, veriga: str | None = None) -> dict | None:
@@ -501,7 +507,7 @@ def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp
         for a in lst:
             cm, merka = prirodna_cena(a.ime, a.cena, a.kategoria)
             red = [vi[v], a.ime, round(a.cena, 2), round(cm, 2) if cm else None, merka, 1 if a.promo else 0,
-                   round(a.redovna, 2) if a.redovna else None, a.kategoria]
+                   round(a.redovna, 2) if a.redovna else None, a.kategoria, razmer_na(a.ime)]
             if e_barkod(a.kod):
                 red.append(a.kod)
             index.append(red)
@@ -509,7 +515,8 @@ def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp
         ime = f"{o.zaglavie} – {o.podzaglavie}".strip(" –") + (f" ({o.razfasovka})" if o.razfasovka else "")
         cm, merka = prirodna_cena(f"{o.zaglavie} {o.podzaglavie}", o.cena, None, o.razfasovka)
         index.append([vi["Kaufland"], ime, round(o.cena, 2), round(cm, 2) if cm else None, merka, 1,
-                      round(o.stara, 2) if o.stara else None, None])
+                      round(o.stara, 2) if o.stara else None, None,
+                      razmer_na(f"{o.zaglavie} {o.podzaglavie} {o.razfasovka}")])
 
     dannni = {
         "data": data_kzp, "obnoveno": datetime.now(SOFIA_TZ).strftime("%d.%m.%Y %H:%M"),
@@ -517,7 +524,7 @@ def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp
         "magazini": {v: magazini.get(v, 0) for v in imena_verigi},
         "spisak": spisak,
         "index": {"verigi": imena_verigi,
-                  "poleta": ["veriga", "ime", "cena", "cena_merka", "merka", "promo", "redovna", "kategoria", "barkod"],
+                  "poleta": ["veriga", "ime", "cena", "cena_merka", "merka", "promo", "redovna", "kategoria", "razmer", "barkod"],
                   "artikuli": index},
     }
     APP_DANNI.parent.mkdir(parents=True, exist_ok=True)
