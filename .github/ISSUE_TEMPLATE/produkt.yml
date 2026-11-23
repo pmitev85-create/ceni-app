@@ -1,0 +1,49 @@
+name: Добави или махни продукт
+description: Промени списъка с продукти в таблицата за цени
+title: "Продукт: "
+labels: ["продукт"]
+body:
+  - type: dropdown
+    id: deistvie
+    attributes:
+      label: Какво да направя
+      options:
+        - Добави
+        - Махни
+      default: 0
+    validations:
+      required: true
+  - type: input
+    id: produkt
+    attributes:
+      label: Продукт
+      description: Как да се казва в таблицата. За „Махни“ напиши името точно както е в таблицата.
+      placeholder: напр. Майонеза
+    validations:
+      required: true
+  - type: input
+    id: dumi
+    attributes:
+      label: Думи за търсене
+      description: |
+        Думи, които трябва да има в името на артикула. Ако е празно, търся по името на продукта.
+        „а б“ = и двете думи · „а|б“ = коя да е от двете · „домат*“ = дума, която започва с „домат“.
+      placeholder: напр. майонеза   или   прясно мляко верея
+  - type: input
+    id: bez
+    attributes:
+      label: Без думи
+      description: Артикули с тези думи не се броят. Отделяй с „|“.
+      placeholder: напр. лека|light
+  - type: input
+    id: kolichestvo
+    attributes:
+      label: Количество
+      description: Колко купуваш обикновено (в мярката отдолу).
+      placeholder: напр. 0.5
+  - type: input
+    id: merka
+    attributes:
+      label: Мярка
+      description: В какво да сравнявам цените – кг, л или бр.
+      placeholder: кг

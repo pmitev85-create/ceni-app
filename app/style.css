@@ -1,0 +1,157 @@
+:root {
+  --bg: #f4f6f4;
+  --card: #ffffff;
+  --text: #17211b;
+  --muted: #5f6b64;
+  --line: #e1e6e2;
+  --accent: #1f6f43;
+  --accent-soft: #e3f1e8;
+  --promo: #b4441c;
+  --promo-soft: #fbe9e2;
+  --best: #1f6f43;
+  --shadow: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101512;
+    --card: #19201b;
+    --text: #e6ece8;
+    --muted: #9aa8a0;
+    --line: #2a332d;
+    --accent: #5cc48a;
+    --accent-soft: #1d3326;
+    --promo: #ff9b73;
+    --promo-soft: #3a2219;
+    --best: #5cc48a;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.4;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color: transparent;
+}
+.top {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px calc(10px) 16px;
+  padding-top: calc(12px + env(safe-area-inset-top));
+  background: var(--accent); color: #fff;
+}
+.top h1 { margin: 0; font-size: 20px; }
+.top .muted { color: rgba(255,255,255,.85); margin: 0; font-size: 13px; }
+.icon-btn {
+  background: rgba(255,255,255,.15); color: #fff; border: 0; border-radius: 50%;
+  width: 40px; height: 40px; font-size: 20px; cursor: pointer;
+}
+main { max-width: 720px; margin: 0 auto; padding: 12px 16px; }
+.tab { display: none; }
+.tab.active { display: block; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.center { text-align: center; }
+.hidden { display: none !important; }
+
+.card {
+  background: var(--card); border-radius: 14px; box-shadow: var(--shadow);
+  border: 1px solid var(--line); padding: 12px 14px; margin-bottom: 10px;
+}
+.search, input, select {
+  width: 100%; font: inherit; color: var(--text);
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 10px;
+}
+.search:focus, input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+/* продукт в списъка */
+.produkt { cursor: pointer; }
+.produkt .glava { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.produkt h3 { margin: 0; font-size: 17px; }
+.cena-golyama { font-size: 20px; font-weight: 700; color: var(--best); white-space: nowrap; }
+.produkt .kade { font-size: 14px; margin-top: 2px; }
+.produkt .artikul { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.verigi { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; display: none; }
+.produkt.open .verigi { display: block; }
+.vred { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.vred:last-child { border-bottom: 0; }
+.vred .v { font-weight: 600; }
+.vred .c { text-align: right; font-weight: 600; white-space: nowrap; }
+.vred .a { grid-column: 1 / -1; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.vred.best .v, .vred.best .c { color: var(--best); }
+.badge {
+  display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px;
+  background: var(--promo-soft); color: var(--promo); margin-left: 6px; vertical-align: middle;
+}
+.badge.ok { background: var(--accent-soft); color: var(--accent); }
+s { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+/* кошница */
+.koshnica h2 { font-size: 15px; margin: 0 0 6px; }
+.koshnica .red { display: flex; justify-content: space-between; padding: 3px 0; font-size: 14px; }
+.koshnica .red b { white-space: nowrap; }
+.koshnica .red.nai b, .koshnica .red.nai span { color: var(--best); }
+
+/* резултати от търсене */
+.rez { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.rez .ime { overflow-wrap: anywhere; }
+.rez .v { font-size: 13px; color: var(--muted); }
+.rez .c { text-align: right; font-weight: 700; white-space: nowrap; }
+.rez .cm { text-align: right; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.rez.exact { background: var(--accent-soft); border-radius: 10px; padding: 10px; border: 0; margin-bottom: 4px; }
+
+.btn {
+  font: inherit; font-weight: 600; border: 0; border-radius: 12px; cursor: pointer;
+  background: var(--accent); color: #fff; padding: 12px 16px;
+}
+.btn.secondary { background: var(--accent-soft); color: var(--accent); }
+.btn.big { width: 100%; padding: 16px; font-size: 18px; margin-bottom: 10px; }
+.row { display: flex; gap: 8px; align-items: flex-end; }
+.row > * { flex: 1; }
+.row > .btn { flex: 0 0 auto; margin-bottom: 10px; }
+.row.end { justify-content: flex-end; }
+.row.end > * { flex: 0 0 auto; }
+
+/* камера */
+.kamera { position: relative; border-radius: 14px; overflow: hidden; background: #000; margin-bottom: 10px; }
+.kamera video { width: 100%; display: block; max-height: 55vh; object-fit: cover; }
+.kamera .ramka {
+  position: absolute; left: 10%; right: 10%; top: 35%; bottom: 35%;
+  border: 3px solid rgba(255,255,255,.9); border-radius: 10px; box-shadow: 0 0 0 999px rgba(0,0,0,.35);
+  pointer-events: none;
+}
+.kamera #spri { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); }
+
+.produkt-info { display: flex; gap: 12px; align-items: center; }
+.produkt-info img { width: 72px; height: 72px; object-fit: contain; background: #fff; border-radius: 10px; flex: 0 0 auto; }
+.produkt-info h3 { margin: 0 0 2px; font-size: 17px; }
+
+/* навигация */
+.tabs {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 6;
+  display: flex; background: var(--card); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbtn {
+  flex: 1; background: none; border: 0; font: inherit; font-size: 12px; color: var(--muted);
+  padding: 8px 0 10px; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;
+}
+.tabbtn span { font-size: 22px; line-height: 1; }
+.tabbtn.active { color: var(--accent); font-weight: 700; }
+
+dialog {
+  border: 0; border-radius: 16px; padding: 16px; width: min(92vw, 460px);
+  background: var(--card); color: var(--text);
+}
+dialog::backdrop { background: rgba(0,0,0,.45); }
+dialog h2 { margin: 0 0 10px; font-size: 18px; }
+dialog label { display: block; font-size: 13px; color: var(--muted); }
+dialog label input, dialog label select { margin-top: 4px; }
+.prazno { text-align: center; padding: 24px 8px; color: var(--muted); }

@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+ceni/.otgovor.md
+ceni/.rezultat.md
+ceni/.ime.txt
