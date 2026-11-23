@@ -55,6 +55,8 @@ def main() -> int:
     p = poleta(sabitie["issue"]["body"])
     deistvie = p.get("Какво да направя", "Добави").lower()
     ime = chisto(p.get("Продукт", ""))
+    if not ime:  # празен формуляр – взимаме името от заглавието „Продукт: …“
+        ime = chisto(re.sub(r"^\s*продукт\s*:\s*", "", sabitie["issue"].get("title", ""), flags=re.I))
     if not ime:
         OTGOVOR.write_text("❌ Не е попълнено име на продукта.", encoding="utf-8")
         return 1
