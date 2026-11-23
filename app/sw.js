@@ -1,5 +1,5 @@
 // Офлайн работа: приложението се пази в кеша, цените – винаги първо от мрежата.
-const KESH = "ceni-v3";
+const KESH = "ceni-v4";
 const OSNOVA = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {

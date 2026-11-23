@@ -3,7 +3,6 @@
 
 const ZXING_URL = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
 const KLUCH_LYUBIMI = "ceni.lyubimi.v1";
-const KLUCH_ISTORIA = "ceni.istoria.v1";
 
 const $ = (s) => document.querySelector(s);
 let DANNI = null;
@@ -31,7 +30,8 @@ function pishiLS(kluch, stoinost) {
   try { localStorage.setItem(kluch, JSON.stringify(stoinost)); } catch (_) {}
 }
 let LYUBIMI = chetiLS(KLUCH_LYUBIMI, []);
-let ISTORIA = chetiLS(KLUCH_ISTORIA, {});
+let IST = null;          // история от сървъра: id -> [[ден, {r, p, promo} | null], ...]
+let IST_IMENA = [];      // изтекли оферти (вече ги няма в днешните данни), за да се намират в историята
 
 // Транслитерация: „Vereya“ намира „ВЕРЕЯ“ и обратно.
 const BG_LAT = { а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"ts",ч:"ch",ш:"sh",щ:"sht",ъ:"a",ь:"y",ю:"yu",я:"ya" };
@@ -78,18 +78,21 @@ async function zaredi(prinudi = false) {
     promo: !!a[p.promo], redovna: a[p.redovna], kat: a[p.kategoria], razmer: p.razmer != null ? a[p.razmer] : null,
     kod: a[p.barkod] || "", n: norm(a[p.ime]),
     ot: p.ot != null ? a[p.ot] || null : null, do: p.do != null ? a[p.do] || null : null,
+    id: p.id != null ? a[p.id] : null,
   }));
   $("#info").textContent = `${DANNI.grad} · цени към ${DANNI.data.split("-").reverse().join(".")}`;
-  zapishiIstoria();
   risuvaiLyubimi();
   if ($("#tarsi").value) tarsiRisuvai();
+  zarediIstoria().then(risuvaiLyubimi).catch(() => {});
 }
 
 // ------------------------------------------------------------------ съвпадения за любим продукт
-function sapostavi(f, { predstoyashti = false } = {}) {
+function sapostavi(f, { predstoyashti = false, vsichki = false } = {}) {
   const regs = dumi(f.dumi).map(dumaRe);
   if (!regs.length) return [];
-  const sas = ARTIKULI.filter((a) => {
+  const izvor = vsichki ? ARTIKULI.concat(IST_IMENA) : ARTIKULI;
+  const sas = izvor.filter((a) => {
+    if (vsichki && a.izteklo) return saotvetstva(a, regs) && (f.razmer == null || (a.razmer != null && a.merka === f.merka && Math.abs(a.razmer - f.razmer) / f.razmer <= 0.08));
     if (izteklo(a) || predstoi(a) !== predstoyashti) return false;
     if (!saotvetstva(a, regs)) return false;
     if (f.kat != null && a.kat != null && a.kat !== f.kat) return false;
@@ -99,6 +102,7 @@ function sapostavi(f, { predstoyashti = false } = {}) {
     }
     return true;
   });
+  if (vsichki) return sas;
   // най-евтиният съвпадащ артикул във всяка верига
   const poVeriga = new Map();
   const kluchCena = (a) => (f.razmer != null ? a.cena : a.cm ?? a.cena);
@@ -166,31 +170,108 @@ function predloziDumi(ime, { kat = null, razmer = null, merka = null } = {}) {
   return w.join(" ");
 }
 
-// ------------------------------------------------------------------ история на цените
-function zapishiIstoria() {
-  if (!DANNI) return;
-  for (const f of LYUBIMI) {
-    const s = sapostavi(f);
-    if (!s.length) continue;
-    ISTORIA[f.id] ??= {};
-    ISTORIA[f.id][DANNI.data] = Object.fromEntries(s.map((a) => [a.v, a.cena]));
-    const dati = Object.keys(ISTORIA[f.id]).sort();
-    for (const d of dati.slice(0, -60)) delete ISTORIA[f.id][d];   // пазим последните 60 дни
-  }
-  pishiLS(KLUCH_ISTORIA, ISTORIA);
+// ------------------------------------------------------------------ история на цените (от сървъра)
+function dekodirai(v) {
+  if (v == null) return null;
+  return v.length === 1 ? { r: v[0], p: v[0], promo: false } : { r: v[0], p: v[1], promo: true };
 }
-function promyana(f, nai) {
-  const ist = ISTORIA[f.id];
-  if (!ist || !DANNI) return "";
-  const predni = Object.keys(ist).filter((d) => d < DANNI.data).sort();
-  if (!predni.length) return "";
-  const d = predni[predni.length - 1];
-  const stara = Math.min(...Object.values(ist[d]));
-  const raz = nai - stara;
-  if (Math.abs(raz) < 0.005) return `<span class="trend">= като на ${datumBg(d)}</span>`;
+
+async function zarediIstoria() {
+  if (!DANNI?.istoria?.length) return;
+  const d = new Date(); d.setMonth(d.getMonth() - 3);
+  const ot = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const failove = DANNI.istoria.filter((x) => x.replace(/^\w+-/, "").slice(0, 7) >= ot)
+    .sort((a, b) => a.replace(/^\w+-/, "").localeCompare(b.replace(/^\w+-/, "")));
+  const sadarzhanie = await Promise.all(failove.map((x) => fetch(`data/istoria/${x}`, { cache: "no-cache" }).then((r) => r.json())));
+  const ist = new Map();
+  const imena = new Map();
+  const dobavi = (id, den, v) => {
+    if (!ist.has(id)) ist.set(id, []);
+    const red = ist.get(id);
+    const posl = red[red.length - 1];
+    if (posl && JSON.stringify(posl[1]) === JSON.stringify(v)) return;
+    red.push([den, v]);
+  };
+  failove.forEach((ime, i) => {
+    const d = sadarzhanie[i];
+    const nachalo = d.parvi_den || `${ime.replace(/^\w+-/, "").slice(0, 7)}-01`;
+    for (const [id, v] of Object.entries(d.nachalo || {})) dobavi(id, nachalo, dekodirai(v));
+    for (const den of Object.keys(d.promeni || {}).sort()) {
+      for (const [id, v] of Object.entries(d.promeni[den])) dobavi(id, den, dekodirai(v));
+    }
+    for (const [id, x] of Object.entries(d.imena || {})) imena.set(id, x);
+  });
+  for (const red of ist.values()) red.sort((a, b) => a[0].localeCompare(b[0]));
+  IST = ist;
+  const dnes = new Set(ARTIKULI.map((a) => a.id));
+  IST_IMENA = [...imena.entries()].filter(([id]) => !dnes.has(id)).map(([id, [v, ime, razmer, merka]]) => ({
+    id, v, ime, razmer, merka, n: norm(ime), kat: null, izteklo: true, cena: null, cm: null,
+  }));
+}
+
+// Цена за мярката: при „само разфасовка X“ – цената на опаковката; иначе за кг/л.
+function koeficient(f, a) {
+  if (f.razmer != null) return 1;
+  if (a.cm != null && a.cena) return a.cm / a.cena;
+  if (a.razmer) return 1 / a.razmer;
+  return null;
+}
+
+// Дневна поредица за любим продукт: за всяка верига – най-ниска платена и редовна цена по дни.
+function istoriaNa(f) {
+  if (!IST) return null;
+  const artikuli = sapostavi(f, { vsichki: true }).filter((a) => a.id && IST.has(a.id) && koeficient(f, a) != null);
+  if (!artikuli.length) return null;
+  const dni = [...new Set(artikuli.flatMap((a) => IST.get(a.id).map((x) => x[0])))].sort();
+  const parvi = dni[0];
+  const vsichkiDni = [];
+  for (let d = new Date(parvi + "T12:00:00"); ; d.setDate(d.getDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10);
+    if (iso > DNES) break;
+    vsichkiDni.push(iso);
+  }
+  const poVeriga = {};
+  for (const a of artikuli) {
+    const k = koeficient(f, a);
+    const red = IST.get(a.id);
+    let j = -1;
+    poVeriga[a.v] ??= vsichkiDni.map(() => ({ p: null, r: null, promo: false }));
+    vsichkiDni.forEach((den, i) => {
+      while (j + 1 < red.length && red[j + 1][0] <= den) j++;
+      const s = j >= 0 ? red[j][1] : null;
+      if (!s) return;
+      const cel = poVeriga[a.v][i];
+      const p = s.p * k, r = s.r != null ? s.r * k : null;
+      if (cel.p == null || p < cel.p) { cel.p = p; cel.promo = s.promo; }
+      if (r != null && (cel.r == null || r < cel.r)) cel.r = r;
+    });
+  }
+  const statistika = {};
+  for (const [v, red] of Object.entries(poVeriga)) {
+    const redovni = red.map((x) => x.r).filter((x) => x != null).map((x) => x.toFixed(2));
+    const chesti = {};
+    redovni.forEach((x) => (chesti[x] = (chesti[x] || 0) + 1));
+    const obichaina = Object.entries(chesti).sort((a, b) => b[1] - a[1])[0]?.[0];
+    let nai = null;
+    red.forEach((x, i) => { if (x.p != null && (!nai || x.p < nai.p)) nai = { p: x.p, den: vsichkiDni[i] }; });
+    statistika[v] = {
+      obichaina: obichaina != null ? Number(obichaina) : null,
+      nai, sega: red[red.length - 1]?.p ?? null,
+      promoDni: red.filter((x) => x.promo).length, dniDanni: red.filter((x) => x.p != null).length,
+    };
+  }
+  return { dni: vsichkiDni, poVeriga, statistika };
+}
+
+function sravnenie(f, nai, cena) {
+  const h = istoriaNa(f);
+  const st = h?.statistika[nai.v];
+  if (!st?.obichaina || st.dniDanni < 2) return "";
+  const raz = (cena - st.obichaina) / st.obichaina;
+  if (Math.abs(raz) < 0.02) return `<div class="obichaino">обичайната цена в ${esc(nai.v)}</div>`;
   return raz < 0
-    ? `<span class="trend dolu">▼ ${evro(-raz)} от ${datumBg(d)}</span>`
-    : `<span class="trend gore">▲ ${evro(raz)} от ${datumBg(d)}</span>`;
+    ? `<div class="obichaino dolu">▼ ${Math.round(-raz * 100)}% под обичайните ${evro(st.obichaina)} в ${esc(nai.v)}</div>`
+    : `<div class="obichaino gore">▲ ${Math.round(raz * 100)}% над обичайните ${evro(st.obichaina)} в ${esc(nai.v)}</div>`;
 }
 
 // ------------------------------------------------------------------ 1. любими
@@ -215,7 +296,7 @@ function risuvaiLyubimi() {
     const lipsva = glavni.filter((v) => !s.some((a) => a.v === v));
     const skoro = sapostavi(f, { predstoyashti: true }).filter((a) => !s.length || cenaNa(a) < cenaNa(s.find((x) => x.v === a.v) || { cena: Infinity, cm: Infinity }));
     const opisanie = f.razmer != null ? razmerTekst(f.razmer, f.merka) : "всички разфасовки, цена за мярка";
-    const deistvia = `<div class="deistvia"><button class="link" data-red="${f.id}">✏️ Промени</button><button class="link opasno" data-mahni="${f.id}">🗑 Махни</button></div>`;
+    const deistvia = `<div class="deistvia"><button class="link" data-ist="${f.id}">📈 История</button><button class="link" data-red="${f.id}">✏️ Промени</button><button class="link opasno" data-mahni="${f.id}">🗑 Махни</button></div>`;
     if (!s.length) {
       return `<div class="card produkt" data-id="${f.id}">
         <div class="glava"><h3>${esc(f.ime)}</h3><span class="muted">не е намерен</span></div>
@@ -226,7 +307,8 @@ function risuvaiLyubimi() {
     const edinica = merka ? `<span class="small muted">/${esc(merka)}</span>` : "";
     return `<div class="card produkt" data-id="${f.id}">
       <div class="glava"><h3>${esc(f.ime)}</h3><span class="cena-golyama">${evro(cenaNa(nai))}${edinica}</span></div>
-      <div class="kade">най-евтино в <b>${esc(nai.v)}</b>${nai.promo ? '<span class="badge">промоция</span>' : ""}${srok(nai)} ${promyana(f, nai.cena)}</div>
+      <div class="kade">най-евтино в <b>${esc(nai.v)}</b>${nai.promo ? '<span class="badge">промоция</span>' : ""}${srok(nai)}</div>
+      ${sravnenie(f, nai, cenaNa(nai))}
       ${skoro.length ? `<div class="kade skoro-red">🔜 ${esc(skoro[0].v)}: ${evro(cenaNa(skoro[0]))} от ${datumBg(skoro[0].ot)}</div>` : ""}
       <div class="artikul">${esc(opisanie)} · в ${s.length} ${s.length === 1 ? "верига" : "вериги"}</div>
       <div class="verigi">${s.map((a, j) => `
@@ -257,10 +339,15 @@ $("#lyubimi").addEventListener("click", (e) => {
     const f = LYUBIMI.find((x) => x.id === mahni.dataset.mahni);
     if (f && confirm(`Да махна ли „${f.ime}“ от любимите?`)) {
       LYUBIMI = LYUBIMI.filter((x) => x.id !== f.id);
-      delete ISTORIA[f.id];
-      pishiLS(KLUCH_LYUBIMI, LYUBIMI); pishiLS(KLUCH_ISTORIA, ISTORIA);
+      pishiLS(KLUCH_LYUBIMI, LYUBIMI);
       risuvaiLyubimi();
     }
+    return;
+  }
+  const ist = e.target.closest("[data-ist]");
+  if (ist) {
+    const f = LYUBIMI.find((x) => x.id === ist.dataset.ist);
+    if (f) pokajiIstoria(f);
     return;
   }
   const red = e.target.closest("[data-red]");
@@ -275,7 +362,7 @@ $("#lyubimi").addEventListener("click", (e) => {
 
 // копие на любимите (за нов телефон или изчистен браузър)
 $("#iznesi").addEventListener("click", async () => {
-  const tekst = JSON.stringify({ lyubimi: LYUBIMI, istoria: ISTORIA });
+  const tekst = JSON.stringify({ lyubimi: LYUBIMI });
   try {
     if (navigator.share) await navigator.share({ title: "Любими – копие", text: tekst });
     else { await navigator.clipboard.writeText(tekst); alert("Копието е копирано. Запази го някъде, напр. в бележка или имейл до себе си."); }
@@ -288,8 +375,7 @@ $("#vnesi").addEventListener("click", () => {
     const d = JSON.parse(tekst);
     const novi = (d.lyubimi || []).filter((f) => !LYUBIMI.some((x) => x.id === f.id));
     LYUBIMI = LYUBIMI.concat(novi);
-    ISTORIA = { ...(d.istoria || {}), ...ISTORIA };
-    pishiLS(KLUCH_LYUBIMI, LYUBIMI); pishiLS(KLUCH_ISTORIA, ISTORIA);
+    pishiLS(KLUCH_LYUBIMI, LYUBIMI);
     risuvaiLyubimi();
     alert(`Възстановени: ${novi.length} продукта.`);
   } catch (_) { alert("Това не прилича на копие от приложението."); }
@@ -343,7 +429,6 @@ $("#sledi").addEventListener("close", () => {
   const i = LYUBIMI.findIndex((x) => x.id === f.id);
   if (i >= 0) LYUBIMI[i] = f; else LYUBIMI.push(f);
   pishiLS(KLUCH_LYUBIMI, LYUBIMI);
-  zapishiIstoria();
   risuvaiLyubimi();
   pokajiSaobshtenie(`⭐ „${f.ime}“ е в любимите`);
 });
@@ -371,6 +456,89 @@ function pokajiSaobshtenie(tekst) {
   t.textContent = tekst;
   t.classList.add("vidim");
   setTimeout(() => t.classList.remove("vidim"), 2200);
+}
+
+// ------------------------------------------------------------------ прозорец „История“
+const CVETOVE = ["#1f6f43", "#c0392b", "#2b6cb0", "#b7791f", "#6b46c1", "#0f766e", "#9c4221", "#4a5568", "#b83280"];
+
+function grafika(h, verigi) {
+  const W = 340, H = 190, L = 40, R = 8, T = 10, B = 26;
+  const vs = verigi.flatMap((v) => h.poVeriga[v].flatMap((x) => [x.p, x.r])).filter((x) => x != null);
+  if (!vs.length) return "";
+  let mn = Math.min(...vs), mx = Math.max(...vs);
+  if (mx - mn < 0.1) { mn -= 0.1; mx += 0.1; }
+  const pad = (mx - mn) * 0.08; mn -= pad; mx += pad;
+  const n = h.dni.length;
+  const x = (i) => L + (n === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (n - 1));
+  const y = (v) => T + ((mx - v) * (H - T - B)) / (mx - mn);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" class="grafika" role="img" aria-label="Графика на цените">`;
+  for (let k = 0; k <= 3; k++) {
+    const v = mn + ((mx - mn) * k) / 3;
+    svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="mreja"/><text x="${L - 4}" y="${y(v) + 3}" class="os" text-anchor="end">${v.toFixed(2).replace(".", ",")}</text>`;
+  }
+  const etiketi = [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, a) => a.indexOf(v) === i);
+  for (const i of etiketi) {
+    const anchor = n > 1 && i === n - 1 ? "end" : n > 1 && i === 0 ? "start" : "middle";
+    svg += `<text x="${x(i)}" y="${H - 8}" class="os" text-anchor="${anchor}">${datumBg(h.dni[i])}</text>`;
+  }
+  verigi.forEach((v, ci) => {
+    const c = CVETOVE[ci % CVETOVE.length];
+    const red = h.poVeriga[v];
+    let d = "", dr = "";
+    red.forEach((s, i) => {
+      if (s.p != null) d += `${d && red[i - 1]?.p != null ? `L${x(i)},${y(red[i - 1].p)}L` : "M"}${x(i)},${y(s.p)}`;
+      if (s.r != null) dr += `${dr && red[i - 1]?.r != null ? `L${x(i)},${y(red[i - 1].r)}L` : "M"}${x(i)},${y(s.r)}`;
+    });
+    if (dr) svg += `<path d="${dr}" fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="4 3" opacity=".55"/>`;
+    if (d) svg += `<path d="${d}" fill="none" stroke="${c}" stroke-width="2.2"/>`;
+    red.forEach((s, i) => { if (s.promo && s.p != null) svg += `<circle cx="${x(i)}" cy="${y(s.p)}" r="2.6" fill="${c}"/>`; });
+  });
+  return svg + "</svg>";
+}
+
+function pokajiIstoria(f) {
+  const h = istoriaNa(f);
+  const kutia = $("#ist-sadarzhanie");
+  $("#ist-zaglavie").textContent = f.ime;
+  if (!h) {
+    kutia.innerHTML = `<p class="prazno">${IST ? "Още няма история за този продукт." : "Историята се зарежда… Опитай пак след секунда."}</p>`;
+    $("#istoria").showModal();
+    return;
+  }
+  const merka = f.razmer != null ? null : (sapostavi(f)[0]?.merka || f.merka);
+  const ed = merka ? `/${merka}` : "";
+  const verigi = Object.keys(h.statistika).sort((a, b) => (h.statistika[a].sega ?? 1e9) - (h.statistika[b].sega ?? 1e9));
+  const redove = verigi.map((v, ci) => {
+    const s = h.statistika[v];
+    const c = CVETOVE[ci % CVETOVE.length];
+    return `<tr>
+      <td><span class="tochka" style="background:${c}"></span>${esc(v)}</td>
+      <td>${s.sega != null ? evro(s.sega) : "–"}</td>
+      <td>${s.obichaina != null ? evro(s.obichaina) : "–"}</td>
+      <td>${s.nai ? `${evro(s.nai.p)}<br><span class="muted">${datumBg(s.nai.den)}</span>` : "–"}</td>
+      <td>${s.promoDni ? `${s.promoDni} ${s.promoDni === 1 ? "ден" : "дни"}` : "–"}</td>
+    </tr>`;
+  }).join("");
+  // общ извод
+  const sega = verigi.map((v) => ({ v, ...h.statistika[v] })).filter((s) => s.sega != null).sort((a, b) => a.sega - b.sega)[0];
+  const naiObshto = verigi.map((v) => ({ v, ...h.statistika[v].nai })).filter((s) => s.p != null).sort((a, b) => a.p - b.p)[0];
+  let izvod = "";
+  if (sega && naiObshto) {
+    izvod = sega.sega <= naiObshto.p + 0.005
+      ? `✅ Сега е <b>най-ниската цена</b> за периода: ${evro(sega.sega)}${ed} в ${esc(sega.v)}.`
+      : `Сега най-евтино: ${evro(sega.sega)}${ed} в ${esc(sega.v)}. Най-ниската за периода беше ${evro(naiObshto.p)}${ed} в ${esc(naiObshto.v)} на ${datumBg(naiObshto.den)}.`;
+  }
+  kutia.innerHTML = `
+    <p class="izvod">${izvod}</p>
+    ${grafika(h, verigi)}
+    <p class="muted small" style="margin:2px 0 8px">Плътна линия – цената, която плащаш; пунктир – редовната цена; точка – промоция.
+      От ${datumBg(h.dni[0])} до днес${merka ? `, цена за ${merka}` : ""}.</p>
+    <table class="ist-tablica">
+      <thead><tr><th>Верига</th><th>Сега</th><th>Обичайно</th><th>Най-ниско</th><th>Промо</th></tr></thead>
+      <tbody>${redove}</tbody>
+    </table>
+    <p class="muted small">„Обичайно“ е най-честата редовна цена за периода. За Kaufland и Lidl от сайтовете виждаме цените само докато има промоция.</p>`;
+  $("#istoria").showModal();
 }
 
 // ------------------------------------------------------------------ 2. търсене

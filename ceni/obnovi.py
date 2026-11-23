@@ -28,6 +28,11 @@ from typing import Iterator
 import requests
 from bs4 import BeautifulSoup
 from openpyxl import Workbook
+
+try:
+    from . import istoria  # type: ignore
+except ImportError:
+    import istoria  # пускане като скрипт
 from openpyxl.comments import Comment
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -61,6 +66,10 @@ IMENA_VERIGI = {
 }
 
 SOFIA_TZ = timezone(timedelta(hours=2))
+
+
+def DNES() -> str:
+    return datetime.now(SOFIA_TZ).date().isoformat()
 
 
 # --------------------------------------------------------------------------- #
@@ -549,21 +558,27 @@ def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp
         imena_verigi.insert(min(1, len(imena_verigi)), "Kaufland")
     vi = {v: i for i, v in enumerate(imena_verigi)}
     index = []
+    ist_kzp: dict[str, list] = {}
+    ist_oferti: dict[str, list] = {}
+    ist_imena: dict[str, list] = {}
     for v, lst in artikuli.items():
         for a in lst:
             cm, merka = prirodna_cena(a.ime, a.cena, a.kategoria)
             red = [vi[v], a.ime, round(a.cena, 2), round(cm, 2) if cm else None, merka, 1 if a.promo else 0,
                    round(a.redovna, 2) if a.redovna else None, a.kategoria, razmer_na(a.ime)]
-            if e_barkod(a.kod):
-                red.append(a.kod)
+            red += [a.kod if e_barkod(a.kod) else None, None, None, istoria.kluch("k", v, a.ime)]
             index.append(red)
+            ist_kzp[red[-1]] = istoria.stoinost(a.redovna, a.cena)
     for o in kaufland:
         ime = f"{o.zaglavie} – {o.podzaglavie}".strip(" –") + (f" ({o.razfasovka})" if o.razfasovka else "")
         cm, merka = prirodna_cena(f"{o.zaglavie} {o.podzaglavie}", o.cena, None, o.razfasovka)
         ot, do = (o.period.split("-") + [""])[:2] if o.period else ("", "")
         index.append([vi["Kaufland"], ime, round(o.cena, 2), round(cm, 2) if cm else None, merka, 1,
                       round(o.stara, 2) if o.stara else None, None,
-                      razmer_na(f"{o.zaglavie} {o.podzaglavie} {o.razfasovka}"), None, _iso(ot.strip()), _iso(do.strip())])
+                      razmer_na(f"{o.zaglavie} {o.podzaglavie} {o.razfasovka}"), None, _iso(ot.strip()), _iso(do.strip()),
+                      istoria.kluch("sK", "Kaufland", ime)])
+        ist_oferti[index[-1][-1]] = istoria.stoinost(o.stara, o.cena)
+        ist_imena[index[-1][-1]] = ["Kaufland", ime, index[-1][8], merka]
     if "Lidl" not in vi:
         imena_verigi.append("Lidl")
         vi["Lidl"] = len(imena_verigi) - 1
@@ -572,7 +587,10 @@ def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp
         cm, merka = prirodna_cena(o["ime"], o["cena"], None, o["razf"])
         index.append([vi["Lidl"], ime, round(o["cena"], 2), round(cm, 2) if cm else None, merka, 1,
                       round(o["stara"], 2) if o["stara"] else None, None,
-                      razmer_na(f"{o['ime']} {o['razf']}"), None, o["ot"], o["do"]])
+                      razmer_na(f"{o['ime']} {o['razf']}"), None, o["ot"], o["do"], istoria.kluch("sL", "Lidl", ime)])
+        if not o["ot"] or o["ot"] <= DNES():
+            ist_oferti[index[-1][-1]] = istoria.stoinost(o["stara"], o["cena"])
+            ist_imena[index[-1][-1]] = ["Lidl", ime, index[-1][8], merka]
 
     dannni = {
         "data": data_kzp, "obnoveno": datetime.now(SOFIA_TZ).strftime("%d.%m.%Y %H:%M"),
@@ -580,9 +598,15 @@ def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp
         "magazini": {v: magazini.get(v, 0) for v in imena_verigi},
         "spisak": spisak,
         "index": {"verigi": imena_verigi,
-                  "poleta": ["veriga", "ime", "cena", "cena_merka", "merka", "promo", "redovna", "kategoria", "razmer", "barkod", "ot", "do"],
+                  "poleta": ["veriga", "ime", "cena", "cena_merka", "merka", "promo", "redovna", "kategoria", "razmer", "barkod", "ot", "do", "id"],
                   "artikuli": index},
     }
+    # история на цените
+    n = istoria.zapishi("kzp", data_kzp, ist_kzp)
+    mahni = {p for p, ok in (("sK", bool(kaufland)), ("sL", bool(lidl))) if ok}
+    m = istoria.zapishi("oferti", DNES(), ist_oferti, mahni_lipsvashti=mahni, imena=ist_imena)
+    print(f"  история: {n} промени от КЗП, {m} промени в офертите")
+    dannni["istoria"] = sorted(p.name for p in istoria.PAPKA.glob("*.json"))
     APP_DANNI.parent.mkdir(parents=True, exist_ok=True)
     APP_DANNI.write_text(json.dumps(dannni, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"  данни за приложението: {APP_DANNI} ({APP_DANNI.stat().st_size / 1e6:.2f} MB, {len(index)} артикула)")

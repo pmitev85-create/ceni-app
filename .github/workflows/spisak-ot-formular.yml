@@ -44,7 +44,7 @@ jobs:
         run: |
           git config user.name "price-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ceni/spisak.csv ceni/ceni.xlsx app/data/ceni.json
+          git add ceni/spisak.csv ceni/ceni.xlsx app/data/ceni.json app/data/istoria
           git diff --cached --quiet && exit 0
           git commit -m "Списък: промяна от формуляр #$ISSUE"
           for i in 1 2 3; do

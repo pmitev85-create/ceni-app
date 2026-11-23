@@ -190,3 +190,18 @@ dialog label input, dialog label select { margin-top: 4px; }
 .skoro-red { color: #1f5fa8; font-weight: 600; }
 @media (prefers-color-scheme: dark) { .skoro-red { color: #8cb8ec; } }
 .skoro-blok { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+
+/* ---- история ---- */
+.obichaino { font-size: 13px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+.obichaino.dolu { color: var(--best); }
+.obichaino.gore { color: var(--promo); }
+#istoria { width: min(96vw, 560px); max-height: 90vh; }
+.izvod { margin: 0 0 8px; font-size: 15px; }
+.grafika { width: 100%; height: auto; display: block; }
+.grafika .mreja { stroke: var(--line); stroke-width: 1; }
+.grafika .os { fill: var(--muted); font-size: 10px; font-family: inherit; }
+.ist-tablica { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 6px; }
+.ist-tablica th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 4px; border-bottom: 1px solid var(--line); }
+.ist-tablica td { padding: 6px 4px; border-bottom: 1px dashed var(--line); vertical-align: top; }
+.ist-tablica td:not(:first-child), .ist-tablica th:not(:first-child) { text-align: right; white-space: nowrap; }
+.tochka { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
