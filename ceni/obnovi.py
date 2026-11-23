@@ -42,6 +42,7 @@ APP_DANNI = PAPKA.parent / "app" / "data" / "ceni.json"
 KZP_OPENDATA = "https://kolkostruva.bg/opendata"
 KZP_BASE = "https://kolkostruva.bg"
 KAUFLAND_URL = "https://www.kaufland.bg/aktualni-predlozheniya/oferti.html"
+LIDL_URL = "https://www.lidl.bg"
 HEADERS = {"User-Agent": "Mozilla/5.0 (price-comparison script; personal use)"}
 
 # Категории, в които стоката се продава на тегло (цената е за кг,
@@ -326,6 +327,46 @@ class OfertaKaufland:
     period: str
 
 
+def lidl_oferti(sesia: requests.Session) -> list[dict]:
+    """Промоциите от lidl.bg – всяка страница с оферти носи данните на продуктите като JSON."""
+    import html as _html
+    nachalo = sesia.get(LIDL_URL + "/", timeout=60).text
+    stranici = sorted(set(re.findall(r'href="(/c/[^"]+/a\d+)"', nachalo)))
+    produkti: dict = {}
+    for put in stranici[:40]:
+        try:
+            t = sesia.get(LIDL_URL + put, timeout=60).text
+        except requests.RequestException:
+            continue
+        for x in re.findall(r'data-grid-data="([^"]*)"', t):
+            try:
+                d = json.loads(_html.unescape(x))
+            except ValueError:
+                continue
+            cena = (d.get("price") or {}).get("price")
+            if not cena or d.get("productId") in produkti:
+                continue
+            pr = d["price"]
+            marka = ((d.get("brand") or {}).get("name") or "").strip()
+            marka = "" if marka in ("-", "") else marka.title()
+            razf = ((pr.get("packaging") or {}).get("text") or "").strip()
+            razf = re.sub(r"^за\s+", "", razf)
+            razf = re.sub(r"/\s*(опаковка|onakoвka|бр\.?|пакет|бутилка|кутия)\s*$", "", razf, flags=re.I)
+
+            def data(ts):
+                try:
+                    return datetime.fromtimestamp(int(ts), SOFIA_TZ).date().isoformat()
+                except (TypeError, ValueError):
+                    return None
+            produkti[d.get("productId")] = {
+                "ime": (f"{marka} – " if marka else "") + d.get("title", "").strip(),
+                "cena": float(cena), "stara": pr.get("oldPrice"), "razf": razf,
+                "ot": data(d.get("storeStartDate")), "do": data(d.get("storeEndDate")),
+                "lidl_plus": "lidl-plus" in put,
+            }
+    return list(produkti.values())
+
+
 def kaufland_oferti(sesia: requests.Session) -> list[OfertaKaufland]:
     r = sesia.get(KAUFLAND_URL, timeout=90)
     r.raise_for_status()
@@ -476,7 +517,12 @@ def razmer_na(tekst: str) -> float | None:
     return round(tochni[0].kolichestvo, 3) if tochni else None
 
 
-def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp, grad, magazini) -> None:
+def _iso(d: str) -> str | None:
+    m = re.match(r"(\d{2})\.(\d{2})\.(\d{4})", d or "")
+    return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else None
+
+
+def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp, grad, magazini, lidl=()) -> None:
     """Данни за мобилното приложение: сравнението по списъка + всички артикули в града за търсене."""
     def art(a: Artikul | None, veriga: str | None = None) -> dict | None:
         if not a:
@@ -514,9 +560,19 @@ def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp
     for o in kaufland:
         ime = f"{o.zaglavie} – {o.podzaglavie}".strip(" –") + (f" ({o.razfasovka})" if o.razfasovka else "")
         cm, merka = prirodna_cena(f"{o.zaglavie} {o.podzaglavie}", o.cena, None, o.razfasovka)
+        ot, do = (o.period.split("-") + [""])[:2] if o.period else ("", "")
         index.append([vi["Kaufland"], ime, round(o.cena, 2), round(cm, 2) if cm else None, merka, 1,
                       round(o.stara, 2) if o.stara else None, None,
-                      razmer_na(f"{o.zaglavie} {o.podzaglavie} {o.razfasovka}")])
+                      razmer_na(f"{o.zaglavie} {o.podzaglavie} {o.razfasovka}"), None, _iso(ot.strip()), _iso(do.strip())])
+    if "Lidl" not in vi:
+        imena_verigi.append("Lidl")
+        vi["Lidl"] = len(imena_verigi) - 1
+    for o in lidl:
+        ime = o["ime"] + (f" ({o['razf']})" if o["razf"] else "") + (" · Lidl Plus" if o["lidl_plus"] else "")
+        cm, merka = prirodna_cena(o["ime"], o["cena"], None, o["razf"])
+        index.append([vi["Lidl"], ime, round(o["cena"], 2), round(cm, 2) if cm else None, merka, 1,
+                      round(o["stara"], 2) if o["stara"] else None, None,
+                      razmer_na(f"{o['ime']} {o['razf']}"), None, o["ot"], o["do"]])
 
     dannni = {
         "data": data_kzp, "obnoveno": datetime.now(SOFIA_TZ).strftime("%d.%m.%Y %H:%M"),
@@ -524,7 +580,7 @@ def izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp
         "magazini": {v: magazini.get(v, 0) for v in imena_verigi},
         "spisak": spisak,
         "index": {"verigi": imena_verigi,
-                  "poleta": ["veriga", "ime", "cena", "cena_merka", "merka", "promo", "redovna", "kategoria", "razmer", "barkod"],
+                  "poleta": ["veriga", "ime", "cena", "cena_merka", "merka", "promo", "redovna", "kategoria", "razmer", "barkod", "ot", "do"],
                   "artikuli": index},
     }
     APP_DANNI.parent.mkdir(parents=True, exist_ok=True)
@@ -777,9 +833,17 @@ def main() -> int:
     try:
         kaufland = kaufland_oferti(sesia)
         print(f"  оферти: {len(kaufland)}")
-    except Exception as e:  # сайтът може да е недостъпен – таблицата пак се прави
+    except Exception as e:
         kaufland = []
         greshki.append(f"Kaufland: {e}")
+        print(f"  НЕУСПЕХ: {e}", file=sys.stderr)
+    print("Изтеглям оферти от Lidl…")
+    try:
+        lidl = lidl_oferti(sesia)
+        print(f"  оферти: {len(lidl)}")
+    except Exception as e:  # сайтът може да е недостъпен – таблицата пак се прави
+        lidl = []
+        greshki.append(f"Lidl: {e}")
         print(f"  НЕУСПЕХ: {e}", file=sys.stderr)
 
     avto = set()
@@ -835,7 +899,7 @@ def main() -> int:
     (PAPKA / ".rezultat.md").write_text("\n".join(f"- {r}" for r in rezyume), encoding="utf-8")
 
     napravi_excel(produkti, rezultati, verigi_koloni, kaufland, data_kzp, grad, magazini, greshki)
-    izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp, grad, magazini)
+    izvadi_json(produkti, rezultati, verigi_koloni, artikuli, kaufland, data_kzp, grad, magazini, lidl)
     print(f"Готово: {IZHOD}")
     return 0
 

@@ -185,3 +185,8 @@ dialog label input, dialog label select { margin-top: 4px; }
   opacity: 0; transition: .25s; pointer-events: none; z-index: 20; max-width: 90vw;
 }
 #toast.vidim { opacity: 1; transform: translateX(-50%) translateY(0); }
+.badge.skoro { background: #e6effa; color: #1f5fa8; }
+@media (prefers-color-scheme: dark) { .badge.skoro { background: #1c2b3d; color: #8cb8ec; } }
+.skoro-red { color: #1f5fa8; font-weight: 600; }
+@media (prefers-color-scheme: dark) { .skoro-red { color: #8cb8ec; } }
+.skoro-blok { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }

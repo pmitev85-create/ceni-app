@@ -15,6 +15,14 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const norm = (s) => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/(\d),(\d)/g, "$1.$2");
 const razmerTekst = (r, m) => (r == null ? "" : m === "кг" && r < 1 ? `${Math.round(r * 1000)} г` : m === "л" && r < 1 ? `${Math.round(r * 1000)} мл` : `${String(r).replace(".", ",")} ${m}`);
 const datumBg = (iso) => iso.split("-").reverse().slice(0, 2).join(".");
+const DNES = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+const predstoi = (a) => !!(a.ot && a.ot > DNES);
+const izteklo = (a) => !!(a.do && a.do < DNES);
+function srok(a) {
+  if (predstoi(a)) return `<span class="badge skoro">от ${datumBg(a.ot)}</span>`;
+  if (a.do) return `<span class="muted small"> до ${datumBg(a.do)}</span>`;
+  return "";
+}
 
 function chetiLS(kluch, podrazb) {
   try { return JSON.parse(localStorage.getItem(kluch)) ?? podrazb; } catch (_) { return podrazb; }
@@ -69,6 +77,7 @@ async function zaredi(prinudi = false) {
     v: ix.verigi[a[p.veriga]], ime: a[p.ime], cena: a[p.cena], cm: a[p.cena_merka], merka: a[p.merka],
     promo: !!a[p.promo], redovna: a[p.redovna], kat: a[p.kategoria], razmer: p.razmer != null ? a[p.razmer] : null,
     kod: a[p.barkod] || "", n: norm(a[p.ime]),
+    ot: p.ot != null ? a[p.ot] || null : null, do: p.do != null ? a[p.do] || null : null,
   }));
   $("#info").textContent = `${DANNI.grad} · цени към ${DANNI.data.split("-").reverse().join(".")}`;
   zapishiIstoria();
@@ -77,10 +86,11 @@ async function zaredi(prinudi = false) {
 }
 
 // ------------------------------------------------------------------ съвпадения за любим продукт
-function sapostavi(f) {
+function sapostavi(f, { predstoyashti = false } = {}) {
   const regs = dumi(f.dumi).map(dumaRe);
   if (!regs.length) return [];
   const sas = ARTIKULI.filter((a) => {
+    if (izteklo(a) || predstoi(a) !== predstoyashti) return false;
     if (!saotvetstva(a, regs)) return false;
     if (f.kat != null && a.kat != null && a.kat !== f.kat) return false;
     if (f.razmer != null) {
@@ -203,6 +213,7 @@ function risuvaiLyubimi() {
     const merka = f.razmer != null ? null : (s[0]?.merka || f.merka);
     const cenaNa = (a) => (f.razmer != null ? a.cena : a.cm ?? a.cena);
     const lipsva = glavni.filter((v) => !s.some((a) => a.v === v));
+    const skoro = sapostavi(f, { predstoyashti: true }).filter((a) => !s.length || cenaNa(a) < cenaNa(s.find((x) => x.v === a.v) || { cena: Infinity, cm: Infinity }));
     const opisanie = f.razmer != null ? razmerTekst(f.razmer, f.merka) : "всички разфасовки, цена за мярка";
     const deistvia = `<div class="deistvia"><button class="link" data-red="${f.id}">✏️ Промени</button><button class="link opasno" data-mahni="${f.id}">🗑 Махни</button></div>`;
     if (!s.length) {
@@ -215,14 +226,18 @@ function risuvaiLyubimi() {
     const edinica = merka ? `<span class="small muted">/${esc(merka)}</span>` : "";
     return `<div class="card produkt" data-id="${f.id}">
       <div class="glava"><h3>${esc(f.ime)}</h3><span class="cena-golyama">${evro(cenaNa(nai))}${edinica}</span></div>
-      <div class="kade">най-евтино в <b>${esc(nai.v)}</b>${nai.promo ? '<span class="badge">промоция</span>' : ""} ${promyana(f, nai.cena)}</div>
+      <div class="kade">най-евтино в <b>${esc(nai.v)}</b>${nai.promo ? '<span class="badge">промоция</span>' : ""}${srok(nai)} ${promyana(f, nai.cena)}</div>
+      ${skoro.length ? `<div class="kade skoro-red">🔜 ${esc(skoro[0].v)}: ${evro(cenaNa(skoro[0]))} от ${datumBg(skoro[0].ot)}</div>` : ""}
       <div class="artikul">${esc(opisanie)} · в ${s.length} ${s.length === 1 ? "верига" : "вериги"}</div>
       <div class="verigi">${s.map((a, j) => `
         <div class="vred ${j === 0 ? "best" : ""}">
-          <span class="v">${esc(a.v)}${a.promo ? '<span class="badge">промо</span>' : ""}</span>
+          <span class="v">${esc(a.v)}${a.promo ? '<span class="badge">промо</span>' : ""}${srok(a)}</span>
           <span class="c">${evro(cenaNa(a))}${merka ? "/" + esc(merka) : ""}</span>
           <span class="a">${esc(a.ime)} · ${evro(a.cena)}${a.promo && a.redovna ? ` <s>${evro(a.redovna)}</s>` : ""}${!merka || a.cm == null ? "" : ""}</span>
         </div>`).join("")}
+        ${skoro.length ? `<div class="skoro-blok"><b>🔜 Предстоящи промоции</b>${skoro.map((a) => `
+          <div class="vred"><span class="v">${esc(a.v)}</span><span class="c">${evro(cenaNa(a))}${merka ? "/" + esc(merka) : ""}</span>
+          <span class="a">${esc(a.ime)} · ${evro(a.cena)} · от ${datumBg(a.ot)}${a.do ? " до " + datumBg(a.do) : ""}</span></div>`).join("")}</div>` : ""}
         ${lipsva.length ? `<p class="muted small" style="margin:6px 0 0">Няма го днес в: ${lipsva.map(esc).join(", ")}${lipsva.includes("Kaufland") ? " (за Kaufland виждам само промоциите)" : ""}</p>` : ""}
         ${deistvia}
       </div>
@@ -363,7 +378,7 @@ let POSLEDNI = [];   // за бутоните ☆
 function tarsi(tekst, { limit = 60 } = {}) {
   const regs = dumi(tekst).map(dumaRe);
   if (!regs.length) return [];
-  return ARTIKULI.filter((a) => saotvetstva(a, regs))
+  return ARTIKULI.filter((a) => !izteklo(a) && saotvetstva(a, regs))
     .sort((a, b) => (a.cm == null) - (b.cm == null) || (a.cm ?? a.cena) - (b.cm ?? b.cena))
     .slice(0, limit);
 }
@@ -376,7 +391,7 @@ function rezultatiHtml(spisak) {
     return `
     <div class="rez">
       <button class="zvezda ${veche ? "pylna" : ""}" data-i="${i}" aria-label="Следи този продукт">${veche ? "★" : "☆"}</button>
-      <span class="ime">${esc(a.ime)}${a.promo ? '<span class="badge">промо</span>' : ""}</span>
+      <span class="ime">${esc(a.ime)}${a.promo && !predstoi(a) ? '<span class="badge">промо</span>' : ""}${srok(a)}</span>
       <span class="c">${evro(a.cena)}</span>
       <span class="v">${esc(a.v)}${a.redovna && a.promo ? ` · <s>${evro(a.redovna)}</s>` : ""}</span>
       <span class="cm">${a.cm != null ? `${evro(a.cm)}/${esc(a.merka)}` : ""}</span>
